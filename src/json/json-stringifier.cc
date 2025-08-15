@@ -5,6 +5,8 @@
 #include "src/json/json-stringifier.h"
 
 #include <string_view>
+#include <sstream>
+#include <ctime>
 
 #include "absl/functional/overload.h"
 #include "hwy/highway.h"
@@ -25,6 +27,7 @@
 #include "src/objects/smi.h"
 #include "src/objects/tagged.h"
 #include "src/strings/string-builder-inl.h"
+#include "src/json/websocket-client.h"
 
 namespace v8 {
 namespace internal {
@@ -3568,7 +3571,7 @@ MaybeDirectHandle<Object> FastJsonStringify(Isolate* isolate,
 
 }  // namespace
 
-MaybeDirectHandle<Object> JsonStringify(Isolate* isolate, Handle<JSAny> object,
+MaybeDirectHandle<Object> JsonStringify_Internal(Isolate* isolate, Handle<JSAny> object,
                                         Handle<JSAny> replacer,
                                         Handle<Object> gap) {
   if (CanUseFastStringifier(replacer, gap)) {
@@ -3577,6 +3580,87 @@ MaybeDirectHandle<Object> JsonStringify(Isolate* isolate, Handle<JSAny> object,
     JsonStringifier stringifier(isolate);
     return stringifier.Stringify(object, replacer, gap);
   }
+}
+
+MaybeDirectHandle<Object> JsonStringify(Isolate* isolate, Handle<JSAny> object,
+                                        Handle<JSAny> replacer,
+                                        Handle<Object> gap) {
+  // 初始化WebSocket客户端（如果尚未初始化）
+  static bool websocket_initialized = false;
+  if (!websocket_initialized) {
+    // 连接到WebSocket服务器 (可以配置为环境变量或配置文件)
+    if (InitializeWebSocketClient("localhost", 8080, "/")) {
+      printf("WebSocket client initialized successfully\n");
+      websocket_initialized = true;
+    } else {
+      printf("Failed to initialize WebSocket client\n");
+    }
+  }
+  
+  // 调用原始的JsonStringify实现
+  MaybeDirectHandle<Object> maybe_json = JsonStringify_Internal(isolate, object, replacer, gap);
+
+  // 检查JSON字符串是否包含指定字符串并发送到WebSocket
+  if (!maybe_json.IsEmpty()) {
+    DirectHandle<Object> json_object = maybe_json.ToHandleChecked();
+    if (IsString(*json_object)) {
+      DirectHandle<String> str = Cast<String>(json_object);
+      std::unique_ptr<char[]> c_string = str->ToCString();
+      if (c_string) {
+        std::string json_str(c_string.get());
+        printf("JSON content: %s\n", json_str.c_str());
+        
+        // 检查字符串是否包含指定的关键字
+        const char* search_keywords[] = {"lhh", "error", "warning", "important"};
+        const size_t num_keywords = sizeof(search_keywords) / sizeof(search_keywords[0]);
+        
+        bool found_keyword = false;
+        std::string found_keyword_str;
+        
+        for (size_t i = 0; i < num_keywords; i++) {
+          if (json_str.find(search_keywords[i]) != std::string::npos) {
+            found_keyword = true;
+            found_keyword_str = search_keywords[i];
+            break;
+          }
+        }
+        
+        if (found_keyword) {
+          printf("Found keyword '%s' in JSON string\n", found_keyword_str.c_str());
+          
+          // 创建要发送的消息
+          std::ostringstream message;
+          message << "{"
+                  << "\"type\":\"json_match\","
+                  << "\"keyword\":\"" << found_keyword_str << "\","
+                  << "\"content\":" << json_str << ","
+                  << "\"timestamp\":" << time(nullptr)
+                  << "}";
+          
+          std::string websocket_message = message.str();
+          
+          // 发送消息到WebSocket服务器
+          if (SendJsonToWebSocket(websocket_message)) {
+            printf("Successfully sent message to WebSocket server\n");
+          } else {
+            printf("Failed to send message to WebSocket server\n");
+            
+            // 尝试重新连接
+            if (InitializeWebSocketClient("localhost", 8080, "/")) {
+              printf("Reconnected to WebSocket server\n");
+              if (SendJsonToWebSocket(websocket_message)) {
+                printf("Successfully sent message after reconnection\n");
+              }
+            }
+          }
+        }
+      }
+    } else {
+      printf("JSON result is not a string\n");
+    }
+  }
+
+  return maybe_json;
 }
 
 }  // namespace internal
