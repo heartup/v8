@@ -9,6 +9,34 @@
 #include <condition_variable>
 #include <queue>
 
+#if _WIN32
+#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+typedef SOCKET SocketHandle;
+#define CloseSocket closesocket
+#define InvalidSocket INVALID_SOCKET
+#define SocketGetLastError() WSAGetLastError()
+static const int kErrInterrupt = WSAEINTR;
+
+#else  // _WIN32
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <netdb.h>
+
+typedef int SocketHandle;
+#define CloseSocket close
+#define InvalidSocket (-1)
+#define SocketGetLastError() errno
+#define SOCKET_ERROR (-1)
+static const int kErrInterrupt = EINTR;
+
+#endif  // _WIN32
+
 namespace v8 {
 namespace internal {
 
@@ -45,7 +73,7 @@ class WebSocketClient {
   // SHA1哈希
   std::string Sha1Hash(const std::string& data);
   
-  int socket_fd_;
+  SocketHandle socket_fd_;
   std::atomic<bool> connected_;
   std::string host_;
   int port_;

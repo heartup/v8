@@ -1,18 +1,35 @@
 #include "src/json/websocket-client.h"
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <netdb.h>
 #include <cstring>
 #include <sstream>
 #include <random>
 #include <iomanip>
 #include <vector>
 
+#if _WIN32
+#pragma comment(lib, "ws2_32.lib")
+#endif
+
 namespace v8 {
 namespace internal {
+
+#if _WIN32
+// Windows 网络初始化
+static bool InitializeWinsock() {
+  WSADATA wsa_data;
+  int result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
+  if (result != 0) {
+    printf("WSAStartup failed with error: %d\n", result);
+    return false;
+  }
+  return true;
+}
+
+// Windows 网络清理
+static void CleanupWinsock() {
+  WSACleanup();
+}
+#endif
 
 // 全局WebSocket客户端管理
 static WebSocketClient*& GetGlobalWebSocketClientRef() {
@@ -21,7 +38,7 @@ static WebSocketClient*& GetGlobalWebSocketClientRef() {
 }
 
 WebSocketClient::WebSocketClient() 
-    : socket_fd_(-1), connected_(false), port_(0) {}
+    : socket_fd_(InvalidSocket), connected_(false), port_(0) {}
 
 WebSocketClient::~WebSocketClient() {
   Disconnect();
@@ -32,20 +49,35 @@ bool WebSocketClient::Connect(const std::string& host, int port, const std::stri
     return true;
   }
   
+#if _WIN32
+  // 初始化 Winsock (Windows)
+  if (!InitializeWinsock()) {
+    return false;
+  }
+#endif
+  
   host_ = host;
   port_ = port;
   
   // 创建socket
   socket_fd_ = socket(AF_INET, SOCK_STREAM, 0);
-  if (socket_fd_ < 0) {
+  if (socket_fd_ == InvalidSocket) {
+    printf("Failed to create socket, error: %d\n", SocketGetLastError());
+#if _WIN32
+    CleanupWinsock();
+#endif
     return false;
   }
   
   // 解析主机地址
   struct hostent* server = gethostbyname(host.c_str());
   if (server == nullptr) {
-    close(socket_fd_);
-    socket_fd_ = -1;
+    printf("Failed to resolve hostname: %s, error: %d\n", host.c_str(), SocketGetLastError());
+    CloseSocket(socket_fd_);
+    socket_fd_ = InvalidSocket;
+#if _WIN32
+    CleanupWinsock();
+#endif
     return false;
   }
   
@@ -53,20 +85,27 @@ bool WebSocketClient::Connect(const std::string& host, int port, const std::stri
   struct sockaddr_in server_addr;
   memset(&server_addr, 0, sizeof(server_addr));
   server_addr.sin_family = AF_INET;
-  server_addr.sin_port = htons(port);
+  server_addr.sin_port = htons(static_cast<uint16_t>(port));
   memcpy(&server_addr.sin_addr.s_addr, server->h_addr, server->h_length);
   
   // 连接到服务器
-  if (connect(socket_fd_, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-    close(socket_fd_);
-    socket_fd_ = -1;
+  if (connect(socket_fd_, reinterpret_cast<struct sockaddr*>(&server_addr), sizeof(server_addr)) != 0) {
+    printf("Failed to connect to server, error: %d\n", SocketGetLastError());
+    CloseSocket(socket_fd_);
+    socket_fd_ = InvalidSocket;
+#if _WIN32
+    CleanupWinsock();
+#endif
     return false;
   }
   
   // 执行WebSocket握手
   if (!PerformHandshake(host, path)) {
-    close(socket_fd_);
-    socket_fd_ = -1;
+    CloseSocket(socket_fd_);
+    socket_fd_ = InvalidSocket;
+#if _WIN32
+    CleanupWinsock();
+#endif
     return false;
   }
   
@@ -95,16 +134,17 @@ bool WebSocketClient::PerformHandshake(const std::string& host, const std::strin
   // 添加调试输出
   printf("WebSocket handshake request:\n%s", request_str.c_str());
   
-  if (send(socket_fd_, request_str.c_str(), request_str.length(), 0) < 0) {
-    printf("Failed to send handshake request\n");
+  int send_result = send(socket_fd_, request_str.c_str(), static_cast<int>(request_str.length()), 0);
+  if (send_result == SOCKET_ERROR) {
+    printf("Failed to send handshake request, error: %d\n", SocketGetLastError());
     return false;
   }
   
   // 读取响应
   char buffer[1024];
-  ssize_t bytes_received = recv(socket_fd_, buffer, sizeof(buffer) - 1, 0);
-  if (bytes_received <= 0) {
-    printf("Failed to receive handshake response\n");
+  int bytes_received = recv(socket_fd_, buffer, sizeof(buffer) - 1, 0);
+  if (bytes_received == SOCKET_ERROR || bytes_received == 0) {
+    printf("Failed to receive handshake response, error: %d\n", SocketGetLastError());
     return false;
   }
   
@@ -174,7 +214,9 @@ bool WebSocketClient::SendFrame(const std::string& data) {
   }
   
   // 发送帧
-  if (send(socket_fd_, frame.data(), frame.size(), 0) < 0) {
+  int result = send(socket_fd_, reinterpret_cast<const char*>(frame.data()), static_cast<int>(frame.size()), 0);
+  if (result == SOCKET_ERROR) {
+    printf("Failed to send WebSocket frame, error: %d\n", SocketGetLastError());
     connected_ = false;
     return false;
   }
@@ -183,11 +225,14 @@ bool WebSocketClient::SendFrame(const std::string& data) {
 }
 
 void WebSocketClient::Disconnect() {
-  if (socket_fd_ >= 0) {
-    close(socket_fd_);
-    socket_fd_ = -1;
+  if (socket_fd_ != InvalidSocket) {
+    CloseSocket(socket_fd_);
+    socket_fd_ = InvalidSocket;
   }
   connected_ = false;
+#if _WIN32
+  CleanupWinsock();
+#endif
 }
 
 bool WebSocketClient::IsConnected() const {
