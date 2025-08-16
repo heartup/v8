@@ -39,11 +39,25 @@ Contributing
 Please follow the instructions mentioned at
 [v8.dev/docs/contribute](https://v8.dev/docs/contribute).
 
+windows下如何只下载和build指定的分支
 
 Windows 设置环境变量：
+set DEPOT_TOOLS_WIN_TOOLCHAIN=0
 set vs2022_install=E:\Program Files\Microsoft Visual Studio\2022\Community
 
 设置环境变量：
-WINDOWSSDKDIR   E:\Windows Kits\10
+set WINDOWSSDKDIR=E:\Windows Kits\10
 
+mkdir chromium && cd chromium
+mkdir src && cd src
+git init
 git fetch https://github.com/heartup/chromium.git +refs/tags/141.0.7357.0:chromium_141.0.7357.0 --depth 1
+git checkout tags/141.0.7357.0
+
+cd ..
+fetch chromium  (中断并修改 .gclient 配置文件中的git地址为自己的fork)
+gclient sync  // 同步依赖
+
+cd src
+gn gen out\Default
+autoninja -C out\Default chrome
