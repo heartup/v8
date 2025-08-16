@@ -37,7 +37,7 @@ static WebSocketClient*& GetGlobalWebSocketClientRef() {
   return g_websocket_client;
 }
 
-WebSocketClient::WebSocketClient() 
+WebSocketClient::WebSocketClient()
     : socket_fd_(InvalidSocket), connected_(false), port_(0) {}
 
 WebSocketClient::~WebSocketClient() {
@@ -48,17 +48,17 @@ bool WebSocketClient::Connect(const std::string& host, int port, const std::stri
   if (connected_.load()) {
     return true;
   }
-  
+
 #if _WIN32
   // 初始化 Winsock (Windows)
   if (!InitializeWinsock()) {
     return false;
   }
 #endif
-  
+
   host_ = host;
   port_ = port;
-  
+
   // 创建socket
   socket_fd_ = socket(AF_INET, SOCK_STREAM, 0);
   if (socket_fd_ == InvalidSocket) {
@@ -68,7 +68,7 @@ bool WebSocketClient::Connect(const std::string& host, int port, const std::stri
 #endif
     return false;
   }
-  
+
   // 解析主机地址
   struct hostent* server = gethostbyname(host.c_str());
   if (server == nullptr) {
@@ -80,14 +80,14 @@ bool WebSocketClient::Connect(const std::string& host, int port, const std::stri
 #endif
     return false;
   }
-  
+
   // 设置服务器地址
   struct sockaddr_in server_addr;
   memset(&server_addr, 0, sizeof(server_addr));
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = htons(static_cast<uint16_t>(port));
   memcpy(&server_addr.sin_addr.s_addr, server->h_addr, server->h_length);
-  
+
   // 连接到服务器
   if (connect(socket_fd_, reinterpret_cast<struct sockaddr*>(&server_addr), sizeof(server_addr)) != 0) {
     printf("Failed to connect to server, error: %d\n", SocketGetLastError());
@@ -98,7 +98,7 @@ bool WebSocketClient::Connect(const std::string& host, int port, const std::stri
 #endif
     return false;
   }
-  
+
   // 执行WebSocket握手
   if (!PerformHandshake(host, path)) {
     CloseSocket(socket_fd_);
@@ -108,14 +108,14 @@ bool WebSocketClient::Connect(const std::string& host, int port, const std::stri
 #endif
     return false;
   }
-  
+
   connected_ = true;
   return true;
 }
 
 bool WebSocketClient::PerformHandshake(const std::string& host, const std::string& path) {
   std::string websocket_key = CreateWebSocketKey();
-  
+
   std::ostringstream request;
   request << "GET " << path << " HTTP/1.1\r\n"
           << "Host: " << host << ":" << port_ << "\r\n"
@@ -128,40 +128,40 @@ bool WebSocketClient::PerformHandshake(const std::string& host, const std::strin
           << "Cache-Control: no-cache\r\n"
           << "Pragma: no-cache\r\n"
           << "\r\n";
-  
+
   std::string request_str = request.str();
-  
+
   // 添加调试输出
   printf("WebSocket handshake request:\n%s", request_str.c_str());
-  
-  int send_result = send(socket_fd_, request_str.c_str(), static_cast<int>(request_str.length()), 0);
+
+  ssize_t send_result = send(socket_fd_, request_str.c_str(), static_cast<int>(request_str.length()), 0);
   if (send_result == SOCKET_ERROR) {
     printf("Failed to send handshake request, error: %d\n", SocketGetLastError());
     return false;
   }
-  
+
   // 读取响应
   char buffer[1024];
-  int bytes_received = recv(socket_fd_, buffer, sizeof(buffer) - 1, 0);
+  ssize_t bytes_received = recv(socket_fd_, buffer, sizeof(buffer) - 1, 0);
   if (bytes_received == SOCKET_ERROR || bytes_received == 0) {
     printf("Failed to receive handshake response, error: %d\n", SocketGetLastError());
     return false;
   }
-  
+
   buffer[static_cast<size_t>(bytes_received)] = '\0';
   std::string response(buffer);
-  
+
   // 添加调试输出
   printf("WebSocket handshake response:\n%s\n", response.c_str());
-  
+
   // 检查是否包含升级确认
   bool has_101 = response.find("HTTP/1.1 101") != std::string::npos;
-  bool has_upgrade = response.find("Upgrade: websocket") != std::string::npos || 
+  bool has_upgrade = response.find("Upgrade: websocket") != std::string::npos ||
                      response.find("upgrade: websocket") != std::string::npos;
-  
-  printf("Handshake check - 101: %s, Upgrade: %s\n", 
+
+  printf("Handshake check - 101: %s, Upgrade: %s\n",
          has_101 ? "YES" : "NO", has_upgrade ? "YES" : "NO");
-  
+
   return has_101 && has_upgrade;
 }
 
@@ -169,7 +169,7 @@ bool WebSocketClient::SendMessage(const std::string& message) {
   if (!connected_.load()) {
     return false;
   }
-  
+
   std::lock_guard<std::mutex> lock(send_mutex_);
   return SendFrame(message);
 }
@@ -177,16 +177,16 @@ bool WebSocketClient::SendMessage(const std::string& message) {
 bool WebSocketClient::SendFrame(const std::string& data) {
   size_t data_length = data.length();
   std::vector<uint8_t> frame;
-  
+
   // WebSocket帧头
   frame.push_back(0x81); // FIN=1, opcode=1 (text frame)
-  
+
   // 生成掩码键
   uint32_t mask_key = 0;
   std::random_device rd;
   std::mt19937 gen(rd());
   mask_key = static_cast<uint32_t>(gen());
-  
+
   // 设置payload长度和掩码位
   if (data_length < 126) {
     frame.push_back(0x80 | static_cast<uint8_t>(data_length)); // MASK=1, payload length
@@ -200,27 +200,27 @@ bool WebSocketClient::SendFrame(const std::string& data) {
       frame.push_back((data_length >> (i * 8)) & 0xFF);
     }
   }
-  
+
   // 添加掩码键
   frame.push_back((mask_key >> 24) & 0xFF);
   frame.push_back((mask_key >> 16) & 0xFF);
   frame.push_back((mask_key >> 8) & 0xFF);
   frame.push_back(mask_key & 0xFF);
-  
+
   // 添加掩码后的payload
   for (size_t i = 0; i < data_length; i++) {
     uint8_t mask_byte = (mask_key >> ((3 - (i % 4)) * 8)) & 0xFF;
     frame.push_back(data[i] ^ mask_byte);
   }
-  
+
   // 发送帧
-  int result = send(socket_fd_, reinterpret_cast<const char*>(frame.data()), static_cast<int>(frame.size()), 0);
+  ssize_t result = send(socket_fd_, reinterpret_cast<const char*>(frame.data()), static_cast<int>(frame.size()), 0);
   if (result == SOCKET_ERROR) {
     printf("Failed to send WebSocket frame, error: %d\n", SocketGetLastError());
     connected_ = false;
     return false;
   }
-  
+
   return true;
 }
 
@@ -243,12 +243,12 @@ std::string WebSocketClient::CreateWebSocketKey() {
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<> dis(0, 255);
-  
+
   std::string key;
   for (int i = 0; i < 16; i++) {
     key += static_cast<char>(dis(gen));
   }
-  
+
   return Base64Encode(key);
 }
 
@@ -275,7 +275,7 @@ bool InitializeWebSocketClient(const std::string& host, int port, const std::str
   if (client == nullptr) {
     client = new WebSocketClient();
   }
-  
+
   return client->Connect(host, port, path);
 }
 
@@ -284,7 +284,7 @@ bool SendJsonToWebSocket(const std::string& json_message) {
   if (client == nullptr || !client->IsConnected()) {
     return false;
   }
-  
+
   return client->SendMessage(json_message);
 }
 
