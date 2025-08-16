@@ -5,23 +5,23 @@ console.log("开始测试WebSocket集成...");
 
 // 测试用例1: 包含关键字"lhh"的对象
 const testObject1 = {
-    name: "lhh",
+    name: "C_updateRoomNotify",
     message: "Hello WebSocket!",
     timestamp: Date.now()
 };
 
-console.log("测试1: 包含关键字'lhh'的对象");
+console.log("测试1: 包含关键字'C_updateRoomNotify'的对象");
 const jsonString1 = JSON.stringify(testObject1);
 console.log("结果:", jsonString1);
 
 // 测试用例2: 包含关键字"error"的对象
 const testObject2 = {
     type: "error",
-    message: "Something went wrong",
+    message: "C_cleanNotify",
     code: 500
 };
 
-console.log("\n测试2: 包含关键字'error'的对象");
+console.log("\n测试2: 包含关键字'C_cleanNotify'的对象");
 const jsonString2 = JSON.stringify(testObject2);
 console.log("结果:", jsonString2);
 
