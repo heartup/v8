@@ -38,3 +38,12 @@ Contributing
 
 Please follow the instructions mentioned at
 [v8.dev/docs/contribute](https://v8.dev/docs/contribute).
+
+
+Windows 设置环境变量：
+set vs2022_install=E:\Program Files\Microsoft Visual Studio\2022\Community
+
+设置环境变量：
+WINDOWSSDKDIR   E:\Windows Kits\10
+
+git fetch https://github.com/heartup/chromium.git +refs/tags/141.0.7357.0:chromium_141.0.7357.0 --depth 1
