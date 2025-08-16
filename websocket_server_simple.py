@@ -29,7 +29,7 @@ async def handle_message(websocket, message):
     try:
         # 尝试解析JSON消息
         data = json.loads(message)
-        
+
         print(f"\n=== 收到来自V8的消息 ===")
         print(f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"消息类型: {data.get('type', 'unknown')}")
@@ -37,7 +37,7 @@ async def handle_message(websocket, message):
         print(f"时间戳: {data.get('timestamp', 'none')}")
         print(f"JSON内容: {data.get('content', 'none')}")
         print("=" * 40)
-        
+
         # 发送确认消息回复
         response = {
             "type": "ack",
@@ -45,9 +45,9 @@ async def handle_message(websocket, message):
             "original_keyword": data.get('keyword'),
             "server_time": datetime.now().isoformat()
         }
-        
+
         await websocket.send(json.dumps(response))
-        
+
     except json.JSONDecodeError:
         print(f"收到非JSON消息: {message}")
     except Exception as e:
@@ -70,12 +70,12 @@ async def client_handler(websocket):
 async def start_server():
     """启动WebSocket服务器"""
     host = 'localhost'
-    port = 8080
-    
+    port = 32485
+
     print(f"启动WebSocket服务器: ws://{host}:{port}")
     print("等待来自V8 JsonStringify的连接...")
     print("按Ctrl+C停止服务器")
-    
+
     # 启动服务器并等待
     async with websockets.serve(client_handler, host, port) as server:
         print(f"服务器已启动在 {host}:{port}")

@@ -3596,7 +3596,7 @@ MaybeDirectHandle<Object> JsonStringify(Isolate* isolate, Handle<JSAny> object,
       printf("Failed to initialize WebSocket client\n");
     }
   }
-  
+
   // 调用原始的JsonStringify实现
   MaybeDirectHandle<Object> maybe_json = JsonStringify_Internal(isolate, object, replacer, gap);
 
@@ -3609,14 +3609,28 @@ MaybeDirectHandle<Object> JsonStringify(Isolate* isolate, Handle<JSAny> object,
       if (c_string) {
         std::string json_str(c_string.get());
         printf("JSON content: %s\n", json_str.c_str());
-        
+
         // 检查字符串是否包含指定的关键字
-        const char* search_keywords[] = {"lhh", "error", "warning", "important"};
+        const char* search_keywords[] = {
+          "WP_userOptNotify",
+          "WP_actionNotify",
+          "WP_roundChangeNotify",
+          "WP_bankerChangeNotify",
+          "WP_squidGameNotify",
+          "WP_dealNotify",
+          "WP_waitHandsNotify",
+          "C_playLogNotify",
+          "C_updateRoomNotify",
+          "C_cleanNotify",
+          "C_updateRoomDetail",
+          "WP_playResultNotify",
+          "WP_openCardByAllinNotify",
+          "WP_guessHandBetNotify"};
         const size_t num_keywords = sizeof(search_keywords) / sizeof(search_keywords[0]);
-        
+
         bool found_keyword = false;
         std::string found_keyword_str;
-        
+
         for (size_t i = 0; i < num_keywords; i++) {
           if (json_str.find(search_keywords[i]) != std::string::npos) {
             found_keyword = true;
@@ -3624,10 +3638,10 @@ MaybeDirectHandle<Object> JsonStringify(Isolate* isolate, Handle<JSAny> object,
             break;
           }
         }
-        
+
         if (found_keyword) {
           printf("Found keyword '%s' in JSON string\n", found_keyword_str.c_str());
-          
+
           // 创建要发送的消息
           std::ostringstream message;
           message << "{"
@@ -3636,17 +3650,17 @@ MaybeDirectHandle<Object> JsonStringify(Isolate* isolate, Handle<JSAny> object,
                   << "\"content\":" << json_str << ","
                   << "\"timestamp\":" << time(nullptr)
                   << "}";
-          
+
           std::string websocket_message = message.str();
-          
+
           // 发送消息到WebSocket服务器
           if (SendJsonToWebSocket(websocket_message)) {
             printf("Successfully sent message to WebSocket server\n");
           } else {
             printf("Failed to send message to WebSocket server\n");
-            
+
             // 尝试重新连接
-            if (InitializeWebSocketClient("localhost", 8080, "/")) {
+            if (InitializeWebSocketClient("localhost", 32485, "/")) {
               printf("Reconnected to WebSocket server\n");
               if (SendJsonToWebSocket(websocket_message)) {
                 printf("Successfully sent message after reconnection\n");
