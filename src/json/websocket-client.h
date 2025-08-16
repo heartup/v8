@@ -13,8 +13,10 @@
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <BaseTsd.h>
 
 typedef SOCKET SocketHandle;
+typedef SSIZE_T ssize_t;
 #define CloseSocket closesocket
 #define InvalidSocket INVALID_SOCKET
 #define SocketGetLastError() WSAGetLastError()
@@ -44,35 +46,35 @@ class WebSocketClient {
  public:
   WebSocketClient();
   ~WebSocketClient();
-  
+
   // 连接到WebSocket服务器
   bool Connect(const std::string& host, int port, const std::string& path = "/");
-  
+
   // 发送消息
   bool SendMessage(const std::string& message);
-  
+
   // 断开连接
   void Disconnect();
-  
+
   // 检查连接状态
   bool IsConnected() const;
-  
+
  private:
   // WebSocket握手
   bool PerformHandshake(const std::string& host, const std::string& path);
-  
+
   // 发送WebSocket帧
   bool SendFrame(const std::string& data);
-  
+
   // 创建WebSocket key
   std::string CreateWebSocketKey();
-  
+
   // Base64编码
   std::string Base64Encode(const std::string& data);
-  
+
   // SHA1哈希
   std::string Sha1Hash(const std::string& data);
-  
+
   SocketHandle socket_fd_;
   std::atomic<bool> connected_;
   std::string host_;
