@@ -55,7 +55,7 @@ git fetch https://github.com/heartup/chromium.git +refs/tags/141.0.7357.0:chromi
 git checkout tags/141.0.7357.0
 
 cd ..
-fetch chromium  (中断并修改 .gclient 配置文件中的git地址为自己的fork)
+fetch chromium  (中断并修改 .gclient 配置文件中的git地址为自己的fork)  // 或者 gclient config --unmanaged  https://github.com/heartup/chromium.git
 gclient sync  // 同步依赖
 
 cd src
