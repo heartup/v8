@@ -3581,95 +3581,33 @@ MaybeDirectHandle<Object> JsonStringify_Internal(Isolate* isolate, Handle<JSAny>
   }
 }
 
+// 全局回调函数指针
+static JSONStringifyCallback g_json_callback = nullptr;
+static void* g_callback_user_data = nullptr;
+
+// 设置回调的函数
+void SetJSONStringifyCallback(JSONStringifyCallback callback, void* user_data) {
+  g_json_callback = callback;
+  g_callback_user_data = user_data;
+}
+
 MaybeDirectHandle<Object> JsonStringify(Isolate* isolate, Handle<JSAny> object,
                                         Handle<JSAny> replacer,
                                         Handle<Object> gap) {
-  // 初始化WebSocket客户端（如果尚未初始化）
-  static bool websocket_initialized = false;
-  if (!websocket_initialized) {
-    // 连接到WebSocket服务器 (可以配置为环境变量或配置文件)
-    if (InitializeWebSocketClient("localhost", 8080, "/")) {
-      printf("WebSocket client initialized successfully\n");
-      websocket_initialized = true;
-    } else {
-      printf("Failed to initialize WebSocket client\n");
-    }
-  }
-
   // 调用原始的JsonStringify实现
   MaybeDirectHandle<Object> maybe_json = JsonStringify_Internal(isolate, object, replacer, gap);
 
-  // 检查JSON字符串是否包含指定字符串并发送到WebSocket
-  if (!maybe_json.IsEmpty()) {
+  // Hook点：通过回调机制传递数据
+  if (!maybe_json.IsEmpty() && g_json_callback != nullptr) {
     DirectHandle<Object> json_object = maybe_json.ToHandleChecked();
     if (IsString(*json_object)) {
       DirectHandle<String> str = Cast<String>(json_object);
       std::unique_ptr<char[]> c_string = str->ToCString();
       if (c_string) {
         std::string json_str(c_string.get());
-        printf("JSON content: %s\n", json_str.c_str());
-
-        // 检查字符串是否包含指定的关键字
-        const char* search_keywords[] = {
-          "WP_userOptNotify",
-          "WP_actionNotify",
-          "WP_roundChangeNotify",
-          "WP_bankerChangeNotify",
-          "WP_squidGameNotify",
-          "WP_dealNotify",
-          "WP_waitHandsNotify",
-          "C_playLogNotify",
-          "C_updateRoomNotify",
-          "C_cleanNotify",
-          "C_updateRoomDetail",
-          "WP_playResultNotify",
-          "WP_openCardByAllinNotify",
-          "WP_guessHandBetNotify"};
-        const size_t num_keywords = sizeof(search_keywords) / sizeof(search_keywords[0]);
-
-        bool found_keyword = false;
-        std::string found_keyword_str;
-
-        for (size_t i = 0; i < num_keywords; i++) {
-          if (json_str.find(search_keywords[i]) != std::string::npos) {
-            found_keyword = true;
-            found_keyword_str = search_keywords[i];
-            break;
-          }
-        }
-
-        if (found_keyword) {
-          printf("Found keyword '%s' in JSON string\n", found_keyword_str.c_str());
-
-          // 创建要发送的消息
-          std::ostringstream message;
-          message << "{"
-                  << "\"type\":\"json_match\","
-                  << "\"keyword\":\"" << found_keyword_str << "\","
-                  << "\"content\":" << json_str << ","
-                  << "\"timestamp\":" << time(nullptr)
-                  << "}";
-
-          std::string websocket_message = message.str();
-
-          // 发送消息到WebSocket服务器
-          if (SendJsonToWebSocket(websocket_message)) {
-            printf("Successfully sent message to WebSocket server\n");
-          } else {
-            printf("Failed to send message to WebSocket server\n");
-
-            // 尝试重新连接
-            if (InitializeWebSocketClient("localhost", 32485, "/")) {
-              printf("Reconnected to WebSocket server\n");
-              if (SendJsonToWebSocket(websocket_message)) {
-                printf("Successfully sent message after reconnection\n");
-              }
-            }
-          }
-        }
+        // 调用回调函数，让上层处理WebSocket发送
+        g_json_callback(json_str, g_callback_user_data);
       }
-    } else {
-      printf("JSON result is not a string\n");
     }
   }
 

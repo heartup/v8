@@ -40,6 +40,11 @@ class V8_EXPORT JSON {
   static V8_WARN_UNUSED_RESULT MaybeLocal<String> Stringify(
       Local<Context> context, Local<Value> json_object,
       Local<String> gap = Local<String>());
+
+    // 添加回调函数类型定义
+    typedef void (*JSONStringifyCallback)(const std::string& json_content, void* user_data);
+    // 设置回调的函数
+    static void SetJSONStringifyCallback(JSONStringifyCallback callback, void* user_data);
 };
 
 }  // namespace v8
