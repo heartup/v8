@@ -3257,6 +3257,10 @@ MaybeLocal<String> JSON::Stringify(Local<Context> context,
   return api_scope.EscapeMaybe(i::Object::ToString(i_isolate, maybe));
 }
 
+void JSON::SetJSONStringifyCallback(JSONStringifyCallback callback, void* user_data) {
+  i::SetJSONStringifyCallback(callback, user_data);
+}
+
 // --- V a l u e   S e r i a l i z a t i o n ---
 
 SharedValueConveyor::SharedValueConveyor(SharedValueConveyor&& other) noexcept
