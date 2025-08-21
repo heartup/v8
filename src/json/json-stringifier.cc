@@ -27,7 +27,6 @@
 #include "src/objects/smi.h"
 #include "src/objects/tagged.h"
 #include "src/strings/string-builder-inl.h"
-#include "src/json/websocket-client.h"
 
 namespace v8 {
 namespace internal {
