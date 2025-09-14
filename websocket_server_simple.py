@@ -31,18 +31,13 @@ async def handle_message(websocket, message):
         data = json.loads(message)
 
         print(f"\n=== 收到来自V8的消息 ===")
-        print(f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"消息类型: {data.get('type', 'unknown')}")
-        print(f"匹配关键字: {data.get('keyword', 'none')}")
-        print(f"时间戳: {data.get('timestamp', 'none')}")
-        print(f"JSON内容: {data.get('content', 'none')}")
+        print(f"JSON内容: {data}")
         print("=" * 40)
 
         # 发送确认消息回复
         response = {
             "type": "ack",
             "status": "received",
-            "original_keyword": data.get('keyword'),
             "server_time": datetime.now().isoformat()
         }
 
@@ -70,7 +65,7 @@ async def client_handler(websocket):
 async def start_server():
     """启动WebSocket服务器"""
     host = 'localhost'
-    port = 32485
+    port = 8080
 
     print(f"启动WebSocket服务器: ws://{host}:{port}")
     print("等待来自V8 JsonStringify的连接...")
