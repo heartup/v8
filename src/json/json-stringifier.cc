@@ -3597,7 +3597,7 @@ MaybeDirectHandle<Object> JsonStringify(Isolate* isolate, Handle<JSAny> object,
   MaybeDirectHandle<Object> maybe_json = JsonStringify_Internal(isolate, object, replacer, gap);
 
   // Hook点：通过回调机制传递数据
-  if (!maybe_json.IsEmpty() && g_json_callback != nullptr) {
+  if (!maybe_json.is_null() && g_json_callback != nullptr) {
     DirectHandle<Object> json_object = maybe_json.ToHandleChecked();
     if (IsString(*json_object)) {
       DirectHandle<String> str = Cast<String>(json_object);
